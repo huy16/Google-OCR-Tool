@@ -4,6 +4,20 @@ const socketIo = require('socket.io');
 const multer = require('multer');
 const path = require('path');
 const geocoderService = require('./geocoder_service');
+const fs = require('fs');
+
+// Ensure directories exist
+const uploadDir = path.join(__dirname, 'uploads');
+const outputDir = path.join(__dirname, 'outputs');
+
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    console.log('Created uploads directory');
+}
+if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+    console.log('Created outputs directory');
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -37,6 +51,13 @@ app.post('/api/start', upload.single('file'), (req, res) => {
 // API: Scan File for Filters
 app.post('/api/scan', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded.');
+
+    console.log('API Scan request received for file:', req.file.path);
+    if (!fs.existsSync(req.file.path)) {
+        console.error('File does not exist on disk:', req.file.path);
+        return res.status(500).send('Uploaded file not found on server');
+    }
+
     try {
         const result = await geocoderService.scanFile(req.file.path);
         // Clean up temp file? Maybe keep for next step? 
@@ -73,7 +94,7 @@ geocoderService.on('error', (err) => {
 // Serve Outputs
 app.use('/outputs', express.static('outputs'));
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
 });
