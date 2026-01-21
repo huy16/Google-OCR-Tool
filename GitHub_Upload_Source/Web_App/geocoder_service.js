@@ -1,4 +1,4 @@
-const puppeteer = require('../Script/node_modules/puppeteer');
+const puppeteer = require('puppeteer');
 const ExcelJS = require('exceljs');
 const fs = require('fs');
 const path = require('path');
@@ -64,9 +64,8 @@ class GeocoderService extends EventEmitter {
         // 4. Launch Browser
         this.emit('log', '🌍 Đang khởi động Google Chrome...');
         this.browser = await puppeteer.launch({
-            headless: false,
-            defaultViewport: null,
-            args: ['--start-maximized']
+            headless: true, // Use headless for server
+            args: ['--no-sandbox', '--disable-setuid-sandbox'] // Required for Render/Docker
         });
         const page = await this.browser.newPage();
 
@@ -310,6 +309,12 @@ class GeocoderService extends EventEmitter {
     }
 
     async scanFile(filePath) {
+        this.emit('log', `Scanning file: ${filePath}`);
+
+        if (!fs.existsSync(filePath)) {
+            throw new Error(`File not found: ${filePath}`);
+        }
+
         // Revert to Safe Mode (readFile) - Reliable for .xlsm
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.readFile(filePath);
