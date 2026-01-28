@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Map Geocoder Pro</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Style -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Socket -->
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+
+<body>
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+
+    <div class="glass-container">
+        <aside class="sidebar">
+            <div class="cps-logo-container">
+                <a href="/">
+                    <img src="cps_logo.png" alt="CPS" class="cps-logo">
+                </a>
+            </div>
+
+            <nav>
+                <a href="#" class="active"><i class="fa-solid fa-rocket"></i> Dashboard</a>
+                <a href="#"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
+                <a href="#"><i class="fa-solid fa-gear"></i> Settings</a>
+            </nav>
+            <div class="version">v3.0.1 (Local)</div>
+        </aside>
+
+        <main class="content">
+            <header>
+                <div class="welcome-text">
+                    <h1>Google Maps Tool</h1>
+                    <p>Professional Data Extraction & OCR System</p>
+                </div>
+                <div class="status-indicator online">
+                    <span class="dot"></span> System Ready
+                </div>
+            </header>
+
+            <div class="dashboard-grid">
+                <!-- Upload Card -->
+                <div class="card upload-card" id="uploadCard">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-cloud-arrow-up"></i> Upload Data</h2>
+                    </div>
+                    <div class="drop-zone" id="dropZone">
+                        <div class="icon-wrapper">
+                            <i class="fa-solid fa-file-excel"></i>
+                        </div>
+                        <h3>Drag & drop Excel file here</h3>
+                        <p>or <span class="browse-btn">browse files</span></p>
+
+                        <div class="file-info hidden" id="fileInfo">
+                            <i class="fa-solid fa-check-circle"></i>
+                            <div>
+                                <span id="fileName">data.xlsx</span>
+                                <span id="fileSize" style="font-size: 12px; color: #888; margin-left: 8px;"></span>
+                            </div>
+                            <i class="fa-solid fa-xmark remove-file" id="removeFile"></i>
+                        </div>
+                    </div>
+
+                    <div class="input-group"
+                        style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 20px;">
+                        <label style="margin: 0; cursor: pointer; font-weight: 600; color: var(--text-light);"
+                            for="headlessToggle">Show Browser window</label>
+                        <label class="switch">
+                            <input type="checkbox" id="headlessToggle">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+
+                    <!-- Moved Input Outside to prevent click loops -->
+                    <input type="file" id="fileInput" accept=".xlsx, .xlsm" style="display:none;">
+
+                    <!-- New Filter Config Section -->
+                    <div class="filter-config hidden" id="filterConfig">
+                        <h3><i class="fa-solid fa-filter"></i> Start Configuration</h3>
+
+                        <div class="input-group">
+                            <label>Project Code</label>
+                            <select id="projectCodeInput">
+                                <option value="">Loading...</option>
+                            </select>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Province (Tỉnh/TP)</label>
+                            <select id="provinceInput">
+                                <option value="">Loading...</option>
+                            </select>
+                        </div>
+
+                        <div class="input-group">
+                            <label>District (Quận/Huyện)</label>
+                            <select id="districtInput">
+                                <option value="">All Districts</option>
+                            </select>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Survey Info (Col 29)</label>
+                            <select id="surveyInput">
+                                <option value="">All Statuses</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button id="startBtn" class="btn-primary" disabled>
+                        <i class="fa-solid fa-play"></i> Start Processing
+                    </button>
+                    <p class="hint">Supported formats: .xlsx, .xlsm</p>
+                </div>
+
+                <!-- Live Status Card -->
+                <div class="card status-card hidden" id="statusCard">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-satellite-dish"></i> Live Progress</h2>
+                        <span class="badge processing">Running</span>
+                    </div>
+
+                    <div class="progress-wrapper">
+                        <div class="progress-info">
+                            <span class="label">Processing...</span>
+                            <span class="percentage" id="progressText">0%</span>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="progressBar"></div>
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <button id="stopBtn" class="btn-primary" style="background: #ff5f56; margin-top: 0;">
+                            <i class="fa-solid fa-stop"></i> Stop & Save Result
+                        </button>
+                    </div>
+
+                    <div class="current-action" id="currentAction">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <span id="statusDetail">Initializing...</span>
+                    </div>
+
+                    <div class="terminal-window" id="logWindow">
+                        <div class="terminal-header">
+                            <span class="dot red"></span>
+                            <span class="dot yellow"></span>
+                            <span class="dot green"></span>
+                            <span class="title">Console Output</span>
+                        </div>
+                        <div class="terminal-body" id="logBody">
+                            <div class="log-line system">> System initialized... Ready.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Result Card (Hidden at start) -->
+                <div class="card result-card hidden" id="resultCard">
+                    <div class="success-icon">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                    <h2>Job Completed!</h2>
+                    <p>All data has been processed successfully.</p>
+                    <div class="stats-row">
+                        <div class="stat">
+                            <span class="val" id="totalProcessed">0</span>
+                            <span class="lbl">Processed</span>
+                        </div>
+                        <div class="stat">
+                            <span class="val">100%</span>
+                            <span class="lbl">Success Rate</span>
+                        </div>
+                    </div>
+                    <a href="#" id="downloadLink" class="btn-download">
+                        <i class="fa-solid fa-download"></i> Download Result
+                    </a>
+                    <button class="btn-secondary" onclick="location.reload()">Process Another File</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js?v=5"></script>
+</body>
+
+</html>

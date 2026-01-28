@@ -4,3 +4,7 @@ output/
 outputs/
 uploads/
 .DS_Store
+dist/
+chrome-win/
+*.zip
+*.log

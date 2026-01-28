@@ -1,10 +1,10 @@
 node_modules
-npm-debug.log
-output
-outputs
-uploads
+dist
 .git
-.gitignore
-Dockerfile
-1. Database
-README.md
+uploads
+outputs
+chrome-win
+Backup_Source_Stable
+*.zip
+*.exe
+.env

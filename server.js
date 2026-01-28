@@ -3,12 +3,13 @@ const http = require('http');
 const socketIo = require('socket.io');
 const multer = require('multer');
 const path = require('path');
-const geocoderService = require('./geocoder_service');
+// Point to the correct updated service in Web_App
+const geocoderService = require('./Web_App/geocoder_service');
 const fs = require('fs');
 
 // Ensure directories exist
-const uploadDir = path.join(__dirname, 'uploads');
-const outputDir = path.join(__dirname, 'outputs');
+const uploadDir = path.join(process.cwd(), 'uploads');
+const outputDir = path.join(process.cwd(), 'outputs');
 
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -19,33 +20,78 @@ if (!fs.existsSync(outputDir)) {
     console.log('Created outputs directory');
 }
 
+// Global Error Handlers to prevent crash
+process.on('uncaughtException', (err) => {
+    console.error('💥 UNCAUGHT EXCEPTION:', err);
+    // Keep process alive if possible, or at least log
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('💥 UNHANDLED REJECTION:', reason);
+});
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
+// Middleware: Request Logger
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
+
 // Setup Uploads
-const upload = multer({ dest: 'uploads/' });
-app.use(express.static('public'));
+const upload = multer({ dest: path.join(process.cwd(), 'uploads') }); // Uploads go to real disk
+app.use(express.static(path.join(__dirname, 'Web_App', 'public'))); // Assets from inside exe (snapshot)
 
 // API: Upload & Start
-app.post('/api/start', upload.single('file'), (req, res) => {
+app.post('/api/start', (req, res, next) => {
+    // Custom wrap for multer to catch errors
+    upload.single('file')(req, res, (err) => {
+        if (err) {
+            console.error('❌ Multer Upload Error:', err);
+            return res.status(500).json({ error: 'Upload failed: ' + err.message });
+        }
+        next();
+    });
+}, (req, res) => {
     if (!req.file) return res.status(400).send('No file uploaded.');
+
+    console.log('✅ File uploaded:', req.file.path);
 
     const jobId = Date.now().toString();
     const inputPath = req.file.path;
-    const outputDir = path.join(__dirname, 'outputs');
+    const outputDir = path.join(process.cwd(), 'outputs');
+
+    // Parse options (safely)
+    let headlessOption = "new";
+    if (req.body.headless === 'false') headlessOption = false;
+
     const options = {
         projectCodeFilter: req.body.projectCode,
         provinceFilter: req.body.province,
         districtFilter: req.body.district,
-        surveyInfoFilter: req.body.surveyInfo
+        surveyInfoFilter: req.body.surveyInfo,
+        headless: headlessOption
     };
 
     // Return Job ID immediately
     res.json({ jobId, message: 'Job started' });
 
     // Run Service in Background
-    geocoderService.run(inputPath, outputDir, jobId, options);
+    // Wrap in try-catch just in case immediate sync error
+    try {
+        geocoderService.run(inputPath, outputDir, jobId, options);
+    } catch (runErr) {
+        console.error('❌ Error triggering run:', runErr);
+    }
+});
+
+// API: Stop Processing
+app.post('/api/stop', (req, res) => {
+    console.log('--- API /stop HIT ---');
+    geocoderService.stop();
+    res.json({ message: 'Stop signal sent' });
 });
 
 // API: Scan File for Filters
@@ -60,10 +106,10 @@ app.post('/api/scan', upload.single('file'), async (req, res) => {
 
     try {
         const result = await geocoderService.scanFile(req.file.path);
-        // Clean up temp file? Maybe keep for next step? 
-        // For simple flow, user re-uploads or we keep it. 
-        // Ideally we keep it and return a session ID, but here explicit re-upload is safer for stateless.
-        // Actually script.js re-uploads on scan? Ideally we just scan temp file.
+        console.log('--- DEBUG SCAN RESULT ---');
+        console.log('Total Rows:', result.totalRows);
+        console.log('Keys:', Object.keys(result));
+        // res.json(result);
         res.json(result);
     } catch (err) {
         console.error('Scan Error:', err);
@@ -92,9 +138,25 @@ geocoderService.on('error', (err) => {
 });
 
 // Serve Outputs
-app.use('/outputs', express.static('outputs'));
+app.use('/outputs', express.static(path.join(process.cwd(), 'outputs')));
+
+// Global Express Error Handler
+app.use((err, req, res, next) => {
+    console.error('💥 Express Global Error:', err);
+    if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal Server Error: ' + err.message });
+    }
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
+
+    // Auto-open browser (Windows)
+    try {
+        const { exec } = require('child_process');
+        exec(`start http://localhost:${PORT}`);
+    } catch (e) {
+        console.error('Failed to auto-open browser:', e);
+    }
 });
